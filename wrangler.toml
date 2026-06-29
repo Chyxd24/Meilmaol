@@ -1,1 +1,19 @@
+name = "meilmaol"
+main = "src/index.js"
+compatibility_date = "2026-06-29"
 
+# KV Namespace (ganti ID dengan punya kamu)
+[[kv_namespaces]]
+binding = "EMAILS"
+id = "GANTI_DENGAN_KV_ID_KAMU"
+
+# Variables (bisa dilihat publik, jangan taruh secret di sini!)
+[vars]
+ADMIN_USERNAME = "s3lvnvmmasa"
+ADMIN_USER_ID = "5085531353"
+CHANNEL_ID = "-1003274298920"
+GROUP_ID = "-1003245780019"
+
+# Secrets (akan di-set via dashboard atau wrangler secret)
+# BOT_TOKEN → wrangler secret put BOT_TOKEN
+# ADMIN_PASSWORD → wrangler secret put ADMIN_PASSWORD
