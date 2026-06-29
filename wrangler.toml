@@ -5,7 +5,7 @@ compatibility_date = "2026-06-29"
 # KV Namespace (ganti ID dengan punya kamu)
 [[kv_namespaces]]
 binding = "EMAILS"
-id = "GANTI_DENGAN_KV_ID_KAMU"
+id = "be35ed43f014482b911d5cc5c85ccb0d"
 
 # Variables (bisa dilihat publik, jangan taruh secret di sini!)
 [vars]
