@@ -16,4 +16,4 @@ GROUP_ID = "-1003245780019"
 
 # Secrets (akan di-set via dashboard atau wrangler secret)
 # BOT_TOKEN → wrangler secret put BOT_TOKEN
-# ADMIN_PASSWORD → wrangler secret put ADMIN_PASSWORD
+# zdmbut ADMIN_PASSWORD → wrangler secret put ADMIN_PASSWORD
