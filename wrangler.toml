@@ -13,7 +13,7 @@ ADMIN_USERNAME = "s3lvnvmmasa"
 ADMIN_USER_ID = "5085531353"
 CHANNEL_ID = "-1003274298920"
 GROUP_ID = "-1003245780019"
-
+# WEBMAIL_URL = "https://meilmaol.username.workers.dev"  # Opsional: auto-detect kalau kosong
 # Secrets (akan di-set via dashboard atau wrangler secret)
 # BOT_TOKEN → wrangler secret put BOT_TOKEN
 # zdmbut ADMIN_PASSWORD → wrangler secret put ADMIN_PASSWORD
