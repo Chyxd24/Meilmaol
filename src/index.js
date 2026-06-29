@@ -766,6 +766,20 @@ async function handleMessage(msg, env) {
     const customKey = text.split(" ")[1];
     return await handleCustomKey(userId, customKey, env);
   }
+  if (text === "/webmail") {
+    const wmUrl = await getWebmailUrl(env);
+    return await tgApi(env, "sendMessage", {
+      chat_id: userId,
+      text: `🌐 *Info Login Webmail*\n\n` +
+            `URL: ${wmUrl}\n\n` +
+            `🆔 User ID: \`${userId}\`\n` +
+            `🔑 Key: \`${userData?.key || "Belum punya key"}\`\n\n` +
+            `Cara login: Buka URL → pilih "User Login" → masukkan User ID & Key.`,
+      parse_mode: "Markdown",
+      reply_markup: getUserKeyboard(wmUrl),
+    });
+  }
+
   if (text === "/help") {
     return await tgApi(env, "sendMessage", {
       chat_id: userId,
@@ -774,6 +788,7 @@ async function handleMessage(msg, env) {
             `*/mykey* - Lihat key akses kamu\n` +
             `*/genkey* - Generate key baru (random)\n` +
             `*/customkey [key]* - Set key custom\n` +
+            `*/webmail* - Info login webmail\n` +
             `*/help* - Tampilkan bantuan\n\n` +
             `Key digunakan untuk login di webmail.`,
       parse_mode: "Markdown",
@@ -790,6 +805,13 @@ async function getBotInfo(env) {
     return res.result;
   }
   return { username: "bot" };
+}
+
+async function getWebmailUrl(env) {
+  // Priority: env.WEBMAIL_URL > auto-detect from worker URL
+  if (env.WEBMAIL_URL) return env.WEBMAIL_URL;
+  // Try to get from bot_info or return placeholder
+  return "https://meilmaol.YOUR_USERNAME.workers.dev";
 }
 
 async function handleStart(userId, username, firstName, chatId, env) {
@@ -813,14 +835,17 @@ async function handleStart(userId, username, firstName, chatId, env) {
       await saveUserData(env, userId, userData);
       return;
     }
+    const webmailUrl2 = await getWebmailUrl(env);
     await tgApi(env, "sendMessage", {
       chat_id: userId,
       text: `✅ *Halo ${escapeMarkdown(firstName)}!*\n\n` +
-            `Status: *APPROVED* ✅\n` +
-            `Key: \`${userData.key}\`\n\n` +
-            `Gunakan key di atas untuk login di webmail.`,
+            `Status: *APPROVED* ✅\n\n` +
+            `🌐 *Webmail:* ${webmailUrl2}\n` +
+            `🆔 *User ID:* \`${userId}\`\n` +
+            `🔑 *Key:* \`${userData.key}\`\n\n` +
+            `Gunakan info di atas untuk login.`,
       parse_mode: "Markdown",
-      reply_markup: getUserKeyboard(),
+      reply_markup: getUserKeyboard(webmailUrl2),
     });
     return;
   }
@@ -1034,16 +1059,22 @@ async function handleApprove(userId, chatId, msgId, env) {
     });
   }
 
+  const webmailUrl = await getWebmailUrl(env);
   await tgApi(env, "sendMessage", {
     chat_id: userId,
     text: `🎉 *Selamat! Akses Diterima!* ✅\n\n` +
           `Halo ${escapeMarkdown(pendingData.first_name)},\n\n` +
           `Permintaan kamu telah *DISETUJUI* oleh admin.\n\n` +
+          `🌐 *Webmail URL:*\n${webmailUrl}\n\n` +
+          `🆔 *User ID:* \`${userId}\`\n` +
           `🔑 *Access Key:* \`${key}\`\n\n` +
-          `Simpan key ini! Key digunakan untuk login di webmail.\n` +
-          `Kamu bisa generate ulang key kapan saja via bot.`,
+          *Cara Login:*\n` +
+          `1. Buka URL di atas\n` +
+          `2. Pilih tab "User Login"\n` +
+          `3. Masukkan User ID & Key\n\n` +
+          `Simpan info ini! Key bisa digenerate ulang via bot.`,
     parse_mode: "Markdown",
-    reply_markup: getUserKeyboard(),
+    reply_markup: getUserKeyboard(webmailUrl),
   });
 }
 
@@ -1346,13 +1377,15 @@ async function handleUserDetail(adminId, userId, env, msgId) {
 
 // ===================== KEYBOARDS =====================
 
-function getUserKeyboard() {
-  return {
-    inline_keyboard: [
-      [{ text: "🔑 Lihat Key", callback_data: "mykey" }, { text: "🔄 Generate Key", callback_data: "genkey" }],
-      [{ text: "❓ Bantuan", callback_data: "help" }],
-    ],
-  };
+function getUserKeyboard(webmailUrl) {
+  const keyboard = [
+    [{ text: "🔑 Lihat Key", callback_data: "mykey" }, { text: "🔄 Generate Key", callback_data: "genkey" }],
+    [{ text: "❓ Bantuan", callback_data: "help" }],
+  ];
+  if (webmailUrl) {
+    keyboard.unshift([{ text: "🌐 Buka Webmail", url: webmailUrl }]);
+  }
+  return { inline_keyboard: keyboard };
 }
 
 function getAdminKeyboard() {
