@@ -762,6 +762,9 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
     if (h.length > 20) h = h.slice(0, 20);
     await env.EMAILS.put("account_history_" + userId, JSON.stringify(h));
   };
+  const registerEmail = async (email) => {
+    await env.EMAILS.put(`email_to_user:${email.toLowerCase().trim()}`, JSON.stringify({ user_id: userId }));
+  };
 
   // Gabungkan domain global admin + domain yang pernah disimpan user
   let domainList = getGlobalDomainList(env);
@@ -780,6 +783,7 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
     const sw = (params.get("email") || "").toLowerCase().trim();
     if (sw && sw.includes("@")) {
       await addToHistory(sw);
+      await registerEmail(sw); // DAFTARKAN
       return new Response("", { status: 302, headers: { Location: "/", "Set-Cookie": `active_mail_${userId}=${encodeURIComponent(sw)}; ${cookieFlags}`, ...noCache } });
     }
     return new Response("", { status: 302, headers: { Location: "/", ...noCache } });
@@ -800,6 +804,7 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
     }
     const newEmail = `${user}@${finalDom}`;
     await addToHistory(newEmail);
+    await registerEmail(newEmail); // DAFTARKAN
     return new Response("", { status: 302, headers: { Location: "/", "Set-Cookie": `active_mail_${userId}=${encodeURIComponent(newEmail)}; ${cookieFlags}`, ...noCache } });
   }
 
@@ -812,13 +817,12 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
       const randUser = Math.random().toString(36).substring(2, 10);
       const newEmail = `${randUser}@${selectedDomain}`;
       await addToHistory(newEmail);
+      await registerEmail(newEmail); // DAFTARKAN
       return new Response("", { status: 302, headers: { Location: "/", "Set-Cookie": `active_mail_${userId}=${encodeURIComponent(newEmail)}; ${cookieFlags}`, ...noCache } });
     }
-    // If no domain selected yet but we have a global list, show selection page
     if (domainList.length > 0) {
       return new Response(domainSelectionPage(domainList), { headers: { "Content-Type": "text/html; charset=utf-8", ...noCache } });
     }
-    // Fallback to old manual setup page if no domain at all
     return new Response(setupDomainPage(), { headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 
@@ -828,6 +832,7 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
     let h = await getHistory();
     h = h.filter(e => e !== cookieEmail);
     await env.EMAILS.put("account_history_" + userId, JSON.stringify(h));
+    // Optional: hapus juga mapping? Sebaiknya jangan, karena email mungkin masih terkirim.
     return new Response("", { status: 302, headers: { Location: "/?action=set_random", "Set-Cookie": `active_mail_${userId}=; Path=/; Max-Age=0`, ...noCache } });
   }
 
@@ -849,7 +854,6 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
 
   const currentEmail = (activeMailCookie || "").toLowerCase().trim();
   if (!currentEmail || !currentEmail.includes("@")) {
-    // Fallback just in case, though should not happen because we set cookie earlier
     if (domainList.length === 0) return new Response(setupDomainPage(), { headers: { "Content-Type": "text/html; charset=utf-8" } });
     return new Response("", { status: 302, headers: { Location: "/?action=set_random", ...noCache } });
   }
@@ -872,7 +876,7 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
     }
     return new Response(JSON.stringify({ count }), { headers: { "Content-Type": "application/json" } });
   }
-
+  
   const cleanStyles = `
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f4f6f9;color:#111;display:flex;justify-content:center;min-height:100vh;padding:20px 15px;-webkit-font-smoothing:antialiased}
