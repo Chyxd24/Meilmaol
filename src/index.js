@@ -1,6 +1,5 @@
 // ============================================================
-// MediaFairy Tmail - FINAL v5.1
-// With Global Domain List, User-Friendly Domain Selection
+// MediaFairy Tmail - FINAL v5.3 (Optimized Speed)
 // ============================================================
 
 export default {
@@ -710,7 +709,7 @@ async function getGroupInvite(env) {
   return "https://t.me/" + (env.GROUP_ID || "").replace("-100", "");
 }
 
-// ===================== USER WEBMAIL (v5.1 with domain selection) =====================
+// ===================== USER WEBMAIL (Optimized) =====================
 
 function getGlobalDomainList(env) {
   if (env.DOMAIN_LIST) {
@@ -783,7 +782,7 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
     const sw = (params.get("email") || "").toLowerCase().trim();
     if (sw && sw.includes("@")) {
       await addToHistory(sw);
-      await registerEmail(sw); // DAFTARKAN
+      await registerEmail(sw);
       return new Response("", { status: 302, headers: { Location: "/", "Set-Cookie": `active_mail_${userId}=${encodeURIComponent(sw)}; ${cookieFlags}`, ...noCache } });
     }
     return new Response("", { status: 302, headers: { Location: "/", ...noCache } });
@@ -804,7 +803,7 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
     }
     const newEmail = `${user}@${finalDom}`;
     await addToHistory(newEmail);
-    await registerEmail(newEmail); // DAFTARKAN
+    await registerEmail(newEmail);
     return new Response("", { status: 302, headers: { Location: "/", "Set-Cookie": `active_mail_${userId}=${encodeURIComponent(newEmail)}; ${cookieFlags}`, ...noCache } });
   }
 
@@ -817,7 +816,7 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
       const randUser = Math.random().toString(36).substring(2, 10);
       const newEmail = `${randUser}@${selectedDomain}`;
       await addToHistory(newEmail);
-      await registerEmail(newEmail); // DAFTARKAN
+      await registerEmail(newEmail);
       return new Response("", { status: 302, headers: { Location: "/", "Set-Cookie": `active_mail_${userId}=${encodeURIComponent(newEmail)}; ${cookieFlags}`, ...noCache } });
     }
     if (domainList.length > 0) {
@@ -832,7 +831,6 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
     let h = await getHistory();
     h = h.filter(e => e !== cookieEmail);
     await env.EMAILS.put("account_history_" + userId, JSON.stringify(h));
-    // Optional: hapus juga mapping? Sebaiknya jangan, karena email mungkin masih terkirim.
     return new Response("", { status: 302, headers: { Location: "/?action=set_random", "Set-Cookie": `active_mail_${userId}=; Path=/; Max-Age=0`, ...noCache } });
   }
 
@@ -861,22 +859,29 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
   const historyOnLoad = await getHistory();
   if (!historyOnLoad.includes(currentEmail)) await addToHistory(currentEmail);
 
-  // Check count (AJAX)
+  // Check count (optimized AJAX)
   if (params.get("check")) {
-    let count = 0;
-    const allKeys = await listAllKeys(env, "email:");
-    for (const key of allKeys) {
-      try {
-        const data = await env.EMAILS.get(key.name);
-        if (data) {
-          const parsed = JSON.parse(data);
-          if (parsed.to.toLowerCase().trim() === currentEmail) count++;
-        }
-      } catch (e) {}
+    const lastCount = parseInt(params.get("lastCount")) || 0;
+    const allEmailKeys = await listAllKeys(env, "email:");
+    const currentCount = allEmailKeys.length;
+
+    if (currentCount === lastCount) {
+      return new Response(JSON.stringify({ unchanged: true, count: currentCount }), { headers: { "Content-Type": "application/json" } });
     }
-    return new Response(JSON.stringify({ count }), { headers: { "Content-Type": "application/json" } });
+
+    // Hitung hanya untuk email user ini
+    let userCount = 0;
+    const emailChecks = allEmailKeys.map(key => env.EMAILS.get(key.name).then(data => {
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (parsed.to.toLowerCase().trim() === currentEmail) userCount++;
+      }
+    }).catch(() => {}));
+    await Promise.all(emailChecks);
+
+    return new Response(JSON.stringify({ count: userCount }), { headers: { "Content-Type": "application/json" } });
   }
-  
+
   const cleanStyles = `
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f4f6f9;color:#111;display:flex;justify-content:center;min-height:100vh;padding:20px 15px;-webkit-font-smoothing:antialiased}
@@ -1004,18 +1009,37 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
       });
     }
 
-    // Inbox
-    let emails = [];
-    const allKeys = await listAllKeys(env, "email:");
-    for (const key of allKeys) {
-      try {
-        const data = await env.EMAILS.get(key.name);
+    // Inbox (optimized: baca paralel untuk email terbaru saja)
+    const allEmailKeys = await listAllKeys(env, "email:");
+    // Urutkan berdasarkan ID (timestamp di awal)
+    allEmailKeys.sort((a, b) => b.name.localeCompare(a.name));
+    const recentKeys = allEmailKeys.slice(0, 30); // batasi 30 terbaru untuk performa
+
+    const emailPromises = recentKeys.map(key => env.EMAILS.get(key.name).then(data => {
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (parsed.to.toLowerCase().trim() === currentEmail) return parsed;
+      }
+      return null;
+    }).catch(() => null));
+
+    const results = await Promise.all(emailPromises);
+    let emails = results.filter(e => e !== null);
+
+    // fallback: jika tidak dapat 30, coba sisanya (jarang terjadi)
+    if (emails.length < recentKeys.length) {
+      const olderKeys = allEmailKeys.slice(30);
+      const olderPromises = olderKeys.map(key => env.EMAILS.get(key.name).then(data => {
         if (data) {
           const parsed = JSON.parse(data);
-          if (parsed.to.toLowerCase().trim() === currentEmail) emails.push(parsed);
+          if (parsed.to.toLowerCase().trim() === currentEmail) return parsed;
         }
-      } catch (e) {}
+        return null;
+      }).catch(() => null));
+      const olderResults = await Promise.all(olderPromises);
+      emails = emails.concat(olderResults.filter(e => e !== null));
     }
+
     emails.sort((a, b) => Number(b.id.substring(0, 13)) - Number(a.id.substring(0, 13)));
 
     const accountHistory = await getHistory();
@@ -1029,12 +1053,15 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
         let lastCount = ${emails.length};
         setInterval(async function(){
           try {
-            const res = await fetch('/?check=1');
+            const res = await fetch('/?check=1&lastCount=' + lastCount);
             if (!res.ok) return;
             const data = await res.json();
-            if (data.count !== lastCount) window.location.reload();
+            if (data.unchanged) return; // tidak ada perubahan
+            if (data.count !== lastCount) {
+              window.location.reload();
+            }
           } catch(e) {}
-        }, 10000);
+        }, 8000);
         function copyMail(){
           navigator.clipboard.writeText(document.getElementById('current-email').innerText).then(()=>{
             const toast = document.getElementById('toast');
@@ -1211,7 +1238,6 @@ function loginPageHTML(error = "") {
   </script></body></html>`;
 }
 
-// Old setup domain page (fallback if no domain configured)
 function setupDomainPage() {
   return `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Setup Domain - MediaFairy Tmail</title>
   <style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f4f6f9;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;}.card{background:#fff;border-radius:16px;padding:30px;max-width:400px;width:100%;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.03);border:1px solid #e0e4e8;}input{padding:14px;border-radius:10px;border:1px solid #e0e4e8;width:100%;font-size:14px;outline:none;margin:16px 0;background:#fafafa;box-sizing:border-box;}button{display:block;width:100%;padding:14px;border-radius:10px;background:#111;color:#fff;border:none;font-size:14px;font-weight:600;cursor:pointer;}</style></head>
