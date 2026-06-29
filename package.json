@@ -1,10 +1,12 @@
 {
   "name": "meilmaol",
   "version": "1.0.0",
+  "description": "MediaFairy Tmail - Protected Email Worker with Telegram Bot Auth",
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
   },
   "devDependencies": {
     "wrangler": "^3.0.0"
