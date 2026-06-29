@@ -1,6 +1,6 @@
 // ============================================================
-// MediaFairy Tmail - FINAL v5.0
-// Gabungan Worker JS v3 + index.js v4 + perbaikan menyeluruh
+// MediaFairy Tmail - FINAL v5.1
+// With Global Domain List, User-Friendly Domain Selection
 // ============================================================
 
 export default {
@@ -710,7 +710,41 @@ async function getGroupInvite(env) {
   return "https://t.me/" + (env.GROUP_ID || "").replace("-100", "");
 }
 
-// ===================== USER WEBMAIL (v4 base + improvements) =====================
+// ===================== USER WEBMAIL (v5.1 with domain selection) =====================
+
+function getGlobalDomainList(env) {
+  if (env.DOMAIN_LIST) {
+    return env.DOMAIN_LIST.split(",").map(d => d.trim()).filter(d => d.length > 0);
+  }
+  return [];
+}
+
+function domainSelectionPage(domainList, error = "") {
+  const options = domainList.map(d => `<option value="${d}">@${d}</option>`).join("");
+  return `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pilih Domain - MediaFairy Tmail</title>
+    <style>
+      body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f4f6f9;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;}
+      .card{background:#fff;border-radius:16px;padding:30px;max-width:400px;width:100%;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.03);border:1px solid #e0e4e8;}
+      select{padding:14px;border-radius:10px;border:1px solid #e0e4e8;width:100%;font-size:14px;outline:none;margin:16px 0;background:#fafafa;box-sizing:border-box;}
+      button{display:block;width:100%;padding:14px;border-radius:10px;background:#111;color:#fff;border:none;font-size:14px;font-weight:600;cursor:pointer;}
+      .error{color:#c62828;font-size:13px;margin-bottom:12px;}
+    </style></head>
+    <body><div class="card">
+      <div style="font-size:48px;margin-bottom:16px;">📧</div>
+      <h2 style="margin-bottom:8px;font-size:20px;">Pilih Domain</h2>
+      <p style="color:#666;font-size:14px;margin-bottom:24px;">Pilih domain yang ingin digunakan untuk email sementara.</p>
+      ${error ? `<div class="error">${error}</div>` : ""}
+      <form action="/" method="GET">
+        <input type="hidden" name="action" value="set_random">
+        <select name="domain" required>
+          <option value="">-- Pilih Domain --</option>
+          ${options}
+        </select>
+        <button type="submit">Buat Email Acak</button>
+      </form>
+    </div></body></html>`;
+}
 
 async function handleUserWebmail(request, env, authData, getCookie, cookieFlags, noCache) {
   const url = new URL(request.url);
@@ -729,11 +763,17 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
     await env.EMAILS.put("account_history_" + userId, JSON.stringify(h));
   };
 
-  let domainList = [];
+  // Gabungkan domain global admin + domain yang pernah disimpan user
+  let domainList = getGlobalDomainList(env);
   try {
-    const s = await env.EMAILS.get("saved_domains_" + userId);
-    domainList = s ? JSON.parse(s) : [];
-  } catch (e) { domainList = []; }
+    const saved = await env.EMAILS.get("saved_domains_" + userId);
+    if (saved) {
+      const userDomains = JSON.parse(saved);
+      userDomains.forEach(d => {
+        if (!domainList.includes(d)) domainList.push(d);
+      });
+    }
+  } catch (e) {}
 
   // Switch account
   if (params.get("action") === "switch_account") {
@@ -765,14 +805,21 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
 
   const activeMailCookie = getCookie("active_mail_" + userId);
 
-  // Set random
+  // Set random / first time domain selection
   if (params.get("action") === "set_random" || !activeMailCookie) {
-    if (domainList.length === 0) return new Response(setupDomainPage(), { headers: { "Content-Type": "text/html; charset=utf-8", ...noCache } });
-    const randUser = Math.random().toString(36).substring(2, 10);
-    const randDom = domainList[Math.floor(Math.random() * domainList.length)];
-    const newEmail = `${randUser}@${randDom}`;
-    await addToHistory(newEmail);
-    return new Response("", { status: 302, headers: { Location: "/", "Set-Cookie": `active_mail_${userId}=${encodeURIComponent(newEmail)}; ${cookieFlags}`, ...noCache } });
+    let selectedDomain = (params.get("domain") || "").toLowerCase().trim();
+    if (params.get("action") === "set_random" && selectedDomain && domainList.includes(selectedDomain)) {
+      const randUser = Math.random().toString(36).substring(2, 10);
+      const newEmail = `${randUser}@${selectedDomain}`;
+      await addToHistory(newEmail);
+      return new Response("", { status: 302, headers: { Location: "/", "Set-Cookie": `active_mail_${userId}=${encodeURIComponent(newEmail)}; ${cookieFlags}`, ...noCache } });
+    }
+    // If no domain selected yet but we have a global list, show selection page
+    if (domainList.length > 0) {
+      return new Response(domainSelectionPage(domainList), { headers: { "Content-Type": "text/html; charset=utf-8", ...noCache } });
+    }
+    // Fallback to old manual setup page if no domain at all
+    return new Response(setupDomainPage(), { headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 
   // Delete session
@@ -802,6 +849,7 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
 
   const currentEmail = (activeMailCookie || "").toLowerCase().trim();
   if (!currentEmail || !currentEmail.includes("@")) {
+    // Fallback just in case, though should not happen because we set cookie earlier
     if (domainList.length === 0) return new Response(setupDomainPage(), { headers: { "Content-Type": "text/html; charset=utf-8" } });
     return new Response("", { status: 302, headers: { Location: "/?action=set_random", ...noCache } });
   }
@@ -968,7 +1016,7 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
 
     const accountHistory = await getHistory();
     const domainOptions = domainList.map(d => `<option value="${d}">${d}</option>`).join("");
-    const [currentUser] = currentEmail.split("@");
+    const [currentUser, currentDomain] = currentEmail.split("@");
 
     return new Response(
       `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -1015,15 +1063,22 @@ async function handleUserWebmail(request, env, authData, getCookie, cookieFlags,
           </div>
           <div id="ubah-menu" class="panel-section">
             <div class="section-title">Ubah Email Custom</div>
-            <form action="/" method="GET" autocomplete="off"><input type="hidden" name="action" value="set_custom">
-              <div class="input-group"><input type="text" name="user" class="input-text" value="${escapeHTML(currentUser)}" placeholder="username">${domainList.length > 0 ? `<select name="domain_select" class="select-box">${domainOptions}</select>` : ""}</div>
-              ${domainList.length === 0 ? `<div style="font-size:12px;color:#ff3b30;margin-bottom:12px;font-weight:500;">Tambahkan domain di menu 'Lainnya' dulu.</div>` : ""}
+            <form action="/" method="GET" autocomplete="off">
+              <input type="hidden" name="action" value="set_custom">
+              <div class="input-group">
+                <input type="text" name="user" class="input-text" value="${escapeHTML(currentUser)}" placeholder="username">
+                <select name="domain_select" class="select-box">
+                  ${domainList.map(d => `<option value="${d}" ${d === currentDomain ? "selected" : ""}>${d}</option>`).join("")}
+                </select>
+              </div>
               <button type="submit" class="btn-primary">Terapkan Email Baru</button>
             </form>
           </div>
           <div id="lainnya-menu" class="panel-section">
             <div class="section-title">Tambah Domain Baru</div>
-            <form action="/" method="GET" autocomplete="off" style="margin-bottom:28px;"><input type="hidden" name="action" value="set_custom"><input type="hidden" name="save_domain" value="on">
+            <form action="/" method="GET" autocomplete="off" style="margin-bottom:28px;">
+              <input type="hidden" name="action" value="set_custom">
+              <input type="hidden" name="save_domain" value="on">
               <div class="input-group"><input type="text" name="domain_input" class="input-text" placeholder="contoh: domain.com" required></div>
               <button type="submit" class="btn-primary" style="background:#007AFF;">Simpan Domain</button>
             </form>
@@ -1152,6 +1207,7 @@ function loginPageHTML(error = "") {
   </script></body></html>`;
 }
 
+// Old setup domain page (fallback if no domain configured)
 function setupDomainPage() {
   return `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Setup Domain - MediaFairy Tmail</title>
   <style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f4f6f9;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;}.card{background:#fff;border-radius:16px;padding:30px;max-width:400px;width:100%;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.03);border:1px solid #e0e4e8;}input{padding:14px;border-radius:10px;border:1px solid #e0e4e8;width:100%;font-size:14px;outline:none;margin:16px 0;background:#fafafa;box-sizing:border-box;}button{display:block;width:100%;padding:14px;border-radius:10px;background:#111;color:#fff;border:none;font-size:14px;font-weight:600;cursor:pointer;}</style></head>
