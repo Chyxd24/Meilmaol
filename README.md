@@ -42,36 +42,33 @@ git push -u origin main
 5. **Deploy command**: `npx wrangler deploy`
 6. Klik **Deploy**
 
-### Step 5: Set Environment Variables
+### Step 5: Set Variables & Secrets
 Masuk ke worker → **Settings → Variables and Secrets**
 
-**Variables** (tab "Variables"):
-| Key | Value |
-|-----|-------|
-| ADMIN_USERNAME | admin |
-| ADMIN_USER_ID | 123456789 |
-| CHANNEL_ID | -1001234567890 |
-| GROUP_ID | -1001234567891 |
+**Variables** (tab Variables):
+| Key | Value | Keterangan |
+|-----|-------|------------|
+| ADMIN_USERNAME | admin | Username login web |
+| ADMIN_USER_ID | 123456789 | Telegram ID kamu |
+| CHANNEL_ID | -100... | ID channel (dari @getidsbot) |
+| GROUP_ID | -100... | ID grup (dari @getidsbot) |
+| WEBMAIL_URL | https://... | URL worker (opsional, auto-detect) |
 
-**Secrets** (tab "Secrets", akan di-encrypt):
+**Secrets** (tab Secrets → Encrypt):
 | Key | Value |
 |-----|-------|
 | BOT_TOKEN | Token dari @BotFather |
-| ADMIN_PASSWORD | Password untuk login web admin |
+| ADMIN_PASSWORD | Password login web admin |
 
 ### Step 6: Set Webhook Telegram
-Setelah deploy, dapatkan URL worker (contoh: `https://meilmaol.username.workers.dev`)
-
 ```bash
-curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://meilmaol.username.workers.dev/webhook"}'
+curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook"   -H "Content-Type: application/json"   -d '{"url":"https://meilmaol.username.workers.dev/webhook"}'
 ```
 
 ### Step 7: Setup Email Routing
 1. Dashboard → **Email → Email Routing**
 2. Aktifkan Email Routing untuk domain
-3. Tambah **Catch-all address** → route ke worker `meilmaol`
+3. Catch-all → route ke worker `meilmaol`
 
 ## 🤖 Cara Pakai Bot
 
@@ -79,63 +76,29 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
 1. Kirim `/start` ke bot
 2. Join channel & grup (wajib)
 3. Tunggu admin approve
-4. Dapat key → login webmail
+4. Bot kirim URL webmail + User ID + Key
+5. Klik tombol "🌐 Buka Webmail" atau buka URL manual
+6. Login dengan User ID & Key
 
-### Admin:
-- `/admin` - Panel admin
+### Commands User:
+- `/start` - Daftar / Lihat status
+- `/mykey` - Lihat key
+- `/genkey` - Generate key baru
+- `/customkey [key]` - Set key custom
+- `/webmail` - Info login webmail (URL + User ID + Key)
+- `/help` - Bantuan
+
+### Commands Admin:
+- `/admin` - Panel admin (button)
 - `/stats` - Statistik
 - `/users` - List user
 - `/broadcast [pesan]` - Kirim ke semua user
-- `/block [user_id]` - Block user
-- `/unblock [user_id]` - Unblock user
+- `/block [id]` / `/unblock [id]` - Block/Unblock
 
 ## 🔐 Sistem Proteksi
-
 - ✅ Join channel & grup (wajib)
 - ✅ Admin approval
 - ✅ 1 User ID = 1 Key
 - ✅ Real-time membership check
 - ✅ Auto-suspend kalau keluar channel/grup
 - ✅ Key bisa regenerate/custom
-
-## 📁 Struktur Repo
-
-```
-Meilmaol/
-├── src/
-│   └── index.js          # Worker code (Tmail + Bot)
-├── wrangler.toml         # Konfigurasi Cloudflare
-├── package.json          # Dependencies
-├── .gitignore
-└── README.md             # Ini
-```
-
-## ⚠️ Catatan Penting
-
-1. **JANGAN** push `wrangler.toml` dengan secret asli ke repo publik
-2. Bot **harus admin** di channel & grup
-3. Channel/Group ID harus pakai prefix `-100`
-4. Setiap akses webmail hit Telegram API (cek membership real-time)
-
-
-## 🔄 Auto-Deploy dengan GitHub Actions (Opsional)
-
-Repo ini sudah include file `.github/workflows/deploy.yml`.
-
-### Setup GitHub Secrets:
-1. Buka repo GitHub → **Settings → Secrets and variables → Actions**
-2. Tambahkan:
-
-| Secret Name | Cara Dapatkan |
-|-------------|---------------|
-| `CLOUDFLARE_API_TOKEN` | Dashboard → My Profile → API Tokens → Create Token → "Edit Cloudflare Workers" template |
-| `CLOUDFLARE_ACCOUNT_ID` | Dashboard Workers → lihat sidebar kanan bawah (Account ID) |
-
-3. Setelah ini, tiap kali `git push` ke branch `main`, worker otomatis deploy!
-
-### Manual Deploy (kalau tidak pakai GitHub Actions)
-```bash
-npm install -g wrangler
-wrangler login
-wrangler deploy
-```
